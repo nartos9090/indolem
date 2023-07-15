@@ -282,7 +282,6 @@ def main():
 
         os.remove(os.path.join(data_args.data_dir, filename + ".txt"))
 
-
     return results
 
 

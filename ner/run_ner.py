@@ -19,8 +19,10 @@
 import logging
 import os
 import sys
+import re
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
+from datetime import datetime
 
 import numpy as np
 from seqeval.metrics import f1_score, precision_score, recall_score
@@ -37,6 +39,7 @@ from transformers import (
 )
 from utils_ner import NerDataset, Split, get_labels
 from trainer import Trainer
+from tokenizer import normalize_string, tokenize as splitter
 
 
 logger = logging.getLogger(__name__)
@@ -166,36 +169,6 @@ def main():
         cache_dir=model_args.cache_dir,
     )
 
-    # Get datasets
-    train_dataset = (
-        NerDataset(
-            data_dir=data_args.data_dir,
-            tokenizer=tokenizer,
-            labels=labels,
-            model_type=config.model_type,
-            max_seq_length=data_args.max_seq_length,
-            overwrite_cache=data_args.overwrite_cache,
-            mode=Split.train,
-            local_rank=training_args.local_rank,
-        )
-        if training_args.do_train
-        else None
-    )
-    eval_dataset = (
-        NerDataset(
-            data_dir=data_args.data_dir,
-            tokenizer=tokenizer,
-            labels=labels,
-            model_type=config.model_type,
-            max_seq_length=data_args.max_seq_length,
-            overwrite_cache=data_args.overwrite_cache,
-            mode=Split.dev,
-            local_rank=training_args.local_rank,
-        )
-        if training_args.do_eval
-        else None
-    )
-
     def align_predictions(predictions: np.ndarray, label_ids: np.ndarray) -> Tuple[List[int], List[int]]:
         preds = np.argmax(predictions, axis=2)
 
@@ -224,8 +197,6 @@ def main():
     trainer = Trainer(
         model=model,
         args=training_args,
-        train_dataset=train_dataset,
-        eval_dataset=eval_dataset,
         compute_metrics=compute_metrics,
     )
 
@@ -258,41 +229,58 @@ def main():
 
     # Predict
     if training_args.do_predict and training_args.local_rank in [-1, 0]:
+        text = "Kepala Dinas Pariwisata dan Ekonomi Kreatif Andhika Permata menyinggung soal pertemuan aktivis lesbian, gay, biseksual, dan transgender (LGBT) yang semula direncanakan akan digelar di Jakarta. Dia menegaskan Disparekraf DKI menolak keberadaan mereka sebab tidak sesuai dengan budaya Indonesia. \nHal itu disampaikan Andhika saat rapat bersama Komisi B DPRD DKI Jakarta soal perkembangan ekonomi Jakarta, Rabu (12/7/2023). Andhika mengungkapkan Disparekraf DKI senang jika ada wisatawan asing ke Jakarta tapi tidak dengan komunitas LGBT."
+        # words = text.split()
+
+        # dataset = []
+
+        # for word in words:
+        #     if bool(re.search(r'\W+', word)):
+        #         dataset.append(word[0:-1])
+        #         dataset.append(word[-1])
+        #     else:
+        #         dataset.append(word)
+        
+        dataset = splitter(normalize_string(text))
+        filename = datetime.now().strftime("%Y%m%d%H%M%S%f")
+
+        saved_splitted_text = os.path.join(data_args.data_dir, filename + ".txt")
+        with open(saved_splitted_text, "w") as writer:
+            for value in dataset:
+                writer.write("%s\n" % (value))
+
         test_dataset = NerDataset(
             data_dir=data_args.data_dir,
             tokenizer=tokenizer,
             labels=labels,
             model_type=config.model_type,
+            mode=filename,
             max_seq_length=data_args.max_seq_length,
-            overwrite_cache=data_args.overwrite_cache,
-            mode=Split.test,
             local_rank=training_args.local_rank,
         )
 
         predictions, label_ids, metrics = trainer.predict(test_dataset)
         preds_list, _ = align_predictions(predictions, label_ids)
 
-        output_test_results_file = os.path.join(training_args.output_dir, "test_results.txt")
-        with open(output_test_results_file, "w") as writer:
-            for key, value in metrics.items():
-                logger.info("  %s = %s", key, value)
-                writer.write("%s = %s\n" % (key, value))
+        result_text = ""
 
         # Save predictions
-        output_test_predictions_file = os.path.join(training_args.output_dir, "test_predictions.txt")
-        with open(output_test_predictions_file, "w") as writer:
-            with open(os.path.join(data_args.data_dir, "test.txt"), "r") as f:
-                example_id = 0
-                for line in f:
-                    if line.startswith("-DOCSTART-") or line == "" or line == "\n":
-                        writer.write(line)
-                        if not preds_list[example_id]:
-                            example_id += 1
-                    elif preds_list[example_id]:
-                        output_line = line.split()[0] + " " + preds_list[example_id].pop(0) + "\n"
-                        writer.write(output_line)
-                    else:
-                        logger.warning("Maximum sequence length exceeded: No prediction for '%s'.", line.split()[0])
+        with open(os.path.join(data_args.data_dir, filename + ".txt"), "r") as f:
+            example_id = 0
+            for line in f:
+                if line.startswith("-DOCSTART-") or line == "" or line == "\n":
+                    result_text = result_text + line
+                    if not preds_list[example_id]:
+                        example_id += 1
+                elif preds_list[example_id]:
+                    output_line = line.split()[0] + " " + preds_list[example_id].pop(0) + "\n"
+                    result_text = result_text + output_line
+                else:
+                    logger.warning("Maximum sequence length exceeded: No prediction for '%s'.", line.split()[0])
+
+        print(result_text)
+
+        os.remove(os.path.join(data_args.data_dir, filename + ".txt"))
 
     return results
 

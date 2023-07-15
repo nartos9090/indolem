@@ -9,10 +9,10 @@ pip install transformers==2.9.0
 export MAX_LENGTH=128
 export BERT_MODEL="indolem/indobert-base-uncased"
 
-for f in 1 2 3 4 5
-do
+# for f in 1 2 3 4 5
+# do
 
-export FOLD=0$f
+export FOLD=01
 export OUTPUT_DIR=indoner$FOLD
 export BATCH_SIZE=32
 export NUM_EPOCHS=30
@@ -27,7 +27,7 @@ cat $DATA_DIR/test.$FOLD.tsv  | tr '\t' ' '  | tr '  ' ' ' > test.txt
 cat train.txt dev.txt test.txt | cut -d " " -f 2 | grep -v "^$"| sort | uniq > labels.txt
 
 
-CUDA_VISIBLE_DEVICES=0 python3 run_ner.py \
+CUDA_VISIBLE_DEVICES=0 /c/Users/narto/AppData/Local/Programs/Python/Python38/python.exe run_ner.py \
 --data_dir . \
 --labels ./labels.txt \
 --model_name_or_path $BERT_MODEL \
@@ -37,8 +37,6 @@ CUDA_VISIBLE_DEVICES=0 python3 run_ner.py \
 --per_gpu_train_batch_size $BATCH_SIZE \
 --save_steps $SAVE_STEPS \
 --seed $SEED \
---do_train \
---do_eval \
 --do_predict
 
-done
+# done
