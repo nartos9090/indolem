@@ -87,12 +87,12 @@ class NerDataset(Dataset):
         model_type: str,
         max_seq_length: Optional[int] = None,
         overwrite_cache=False,
-        mode: Split = Split.train,
+        mode: str = None,
         local_rank=-1,
     ):
         # Load data features from cache or dataset file
         cached_features_file = os.path.join(
-            data_dir, "cached_{}_{}_{}".format(mode.value, tokenizer.__class__.__name__, str(max_seq_length)),
+            data_dir, "cached_{}_{}_{}".format(mode, tokenizer.__class__.__name__, str(max_seq_length)),
         )
 
         with torch_distributed_zero_first(local_rank):
@@ -134,9 +134,7 @@ class NerDataset(Dataset):
         return self.features[i]
 
 
-def read_examples_from_file(data_dir, mode: Union[Split, str]) -> List[InputExample]:
-    if isinstance(mode, Split):
-        mode = mode.value
+def read_examples_from_file(data_dir, mode: str) -> List[InputExample]:
     file_path = os.path.join(data_dir, f"{mode}.txt")
     guid_index = 1
     examples = []
