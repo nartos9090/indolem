@@ -92,7 +92,7 @@ class DataTrainingArguments:
     )
 
 
-def main():
+def predict(text):
     # See all possible arguments in src/transformers/training_args.py
     # or by passing the --help flag to this script.
     # We now keep distinct sets of args, for a cleaner separation of concerns.
@@ -229,7 +229,6 @@ def main():
 
     # Predict
     if training_args.do_predict and training_args.local_rank in [-1, 0]:
-        text = "Kepala Dinas Pariwisata dan Ekonomi Kreatif Andhika Permata menyinggung soal pertemuan aktivis lesbian, gay, biseksual, dan transgender (LGBT) yang semula direncanakan akan digelar di Jakarta. Dia menegaskan Disparekraf DKI menolak keberadaan mereka sebab tidak sesuai dengan budaya Indonesia. \nHal itu disampaikan Andhika saat rapat bersama Komisi B DPRD DKI Jakarta soal perkembangan ekonomi Jakarta, Rabu (12/7/2023). Andhika mengungkapkan Disparekraf DKI senang jika ada wisatawan asing ke Jakarta tapi tidak dengan komunitas LGBT."
         # words = text.split()
 
         # dataset = []
@@ -263,6 +262,7 @@ def main():
         preds_list, _ = align_predictions(predictions, label_ids)
 
         result_text = ""
+        entities = []
 
         # Save predictions
         with open(os.path.join(data_args.data_dir, filename + ".txt"), "r") as f:
@@ -273,7 +273,13 @@ def main():
                     if not preds_list[example_id]:
                         example_id += 1
                 elif preds_list[example_id]:
-                    output_line = line.split()[0] + " " + preds_list[example_id].pop(0) + "\n"
+                    word = line.split()[0]
+                    type = preds_list[example_id].pop(0)
+                    output_line = word + " " + type + "\n"
+                    entities.append({
+                        'name': word,
+                        'type': type,
+                    })
                     result_text = result_text + output_line
                 else:
                     logger.warning("Maximum sequence length exceeded: No prediction for '%s'.", line.split()[0])
@@ -281,9 +287,4 @@ def main():
         print(result_text)
 
         os.remove(os.path.join(data_args.data_dir, filename + ".txt"))
-
-    return results
-
-
-if __name__ == "__main__":
-    main()
+        return entities
